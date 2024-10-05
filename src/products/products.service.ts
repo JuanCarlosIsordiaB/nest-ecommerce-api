@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -7,40 +12,54 @@ import { Product } from './entities/product.entity';
 
 @Injectable()
 export class ProductsService {
-
+  private readonly logger = new Logger('ProductsService');
 
   //patron repositorio
   constructor(
     @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>
-
-  ){}
-
+    private readonly productRepository: Repository<Product>,
+  ) {}
 
   async create(createProductDto: CreateProductDto) {
     try {
       const producto = this.productRepository.create(createProductDto);
+
       await this.productRepository.save(producto);
+
       return producto;
     } catch (error) {
       console.log(error);
-      throw new InternalServerErrorException('Algo salio mal.....');
+      this.handleErrorExceptions(error);
     }
   }
 
+  //Paginar
   findAll() {
-    return `This action returns all products`;
+    const productos = this.productRepository.find({});
+    return productos;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} product`;
+  findOne(id: string) {
+    
+    return this.productRepository.findOneBy({id})
+    
   }
 
   update(id: number, updateProductDto: UpdateProductDto) {
     return `This action updates a #${id} product`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} product`;
+  async remove(id: number, ) {
+    const product = this.findOne(id);
+    await this.productsService.remove(product);
+  }
+
+  private handleErrorExceptions(error: any) {
+    if ((error = '23505')) {
+      
+      throw new BadRequestException(error.detail);
+    }
+
+    this.logger.error(error);
   }
 }
