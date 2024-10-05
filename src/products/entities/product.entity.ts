@@ -1,69 +1,65 @@
-import { BeforeInsert, Column, Entity, PrimaryGeneratedColumn } from "typeorm";
-
-
-
+import { BeforeInsert, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()
 export class Product {
+  @PrimaryGeneratedColumn('uuid')
+  id: number;
 
-    @PrimaryGeneratedColumn('uuid')
-    id: number;
+  @Column('text', {
+    unique: true,
+  })
+  title: string;
 
-    @Column('text',{
-        unique: true,
-    })
-    title: string;
+  @Column('float', {
+    default: 0,
+  })
+  price: number;
 
-    @Column('float',{
-        default: 0
-    })
-    price: number;
+  @Column('text', {
+    nullable: true,
+  })
+  description: string;
 
+  @Column('text', {
+    unique: true,
+  })
+  slug: string;
 
-    @Column('text', {
-        nullable: true
-    })
-    description: string;
+  @Column('int', {
+    default: 0,
+  })
+  stock: number;
 
+  @Column('text', {
+    array: true,
+  })
+  sizes: string[];
 
+  @Column('text')
+  gender: string;
 
-    @Column('text', {
-        unique: true
-    })
-    slug: string;
+  @Column('text',{
+    array: true,
+    default: []
+  })
+  tags: string[];
+  //images
 
-    @Column('int', {
-        default:0
-    })
-    stock: number;
+  @BeforeInsert()
+  checkSlugInsert() {
+    this.slug = this.title
+      .toLocaleLowerCase()
+      .toLocaleLowerCase()
+      .replaceAll(' ', '-')
+      .replaceAll("'", '');
+  }
 
-
-    @Column('text', {
-        array: true
-    })
-    sizes:string[];
-
-    @Column('text')
-    gender:string;
-
-
-    //tags
-    //images
-
-
-    @BeforeInsert()
-    checkSlugInsert(){
-        this.slug = this.title
-            .toLocaleLowerCase()
-            .toLocaleLowerCase()
-            .replaceAll(' ', '-')
-            .replaceAll("'", '');
-    }
-
-
-
-
-
-
-
+  @BeforeUpdate()
+  checkSlugInsert() {
+    this.slug = this.slug
+      .toLocaleLowerCase()
+      .toLocaleLowerCase()
+      .replaceAll(' ', '-')
+      .replaceAll("'", '');
+  }
 }

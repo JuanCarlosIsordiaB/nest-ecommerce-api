@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -53,12 +54,32 @@ export class ProductsService {
     if (isUUID(id)) {
       product = await this.productRepository.findOneBy({ id });
     } else {
-      product = await this.productRepository.findOneBy({ slug: id });
+      const queryBuilder = this.productRepository.createQueryBuilder();
+      product = await queryBuilder
+        .where(`UPPER(title) =:title or slug =: slug`, {
+          title: id.toUpperCase(),
+          slug: id.toLowerCase(),
+        })
+        .getOne();
     }
   }
 
-  update(id: number, updateProductDto: UpdateProductDto) {
-    return `This action updates a #${id} product`;
+  async update(id: string, updateProductDto: UpdateProductDto) {
+    const product = await this.productRepository.preload({
+      id,
+      ...updateProductDto, // busca por id y cambia todas las propiedades
+    });
+
+    if (!product)
+      throw new NotFoundException(`Product with id ${id} not found`);
+
+    try {
+      await this.productRepository.save(product);
+    } catch (error) {
+      console.log(error)
+      this.handleErrorExceptions(error);
+    }
+    return product;
   }
 
   async remove(id: number) {
