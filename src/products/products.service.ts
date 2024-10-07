@@ -14,6 +14,7 @@ import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { validate as isUUID } from 'uuid';
 import { ProductImage } from './entities';
 
+
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger('ProductsService');
@@ -24,6 +25,8 @@ export class ProductsService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(ProductImage)
     private readonly productRepository: Repository<ProductImage>,
+    
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(createProductDto: CreateProductDto) {
@@ -42,15 +45,19 @@ export class ProductsService {
   }
 
   //Paginar
-  findAll(paginationDto: PaginationDto) {
+  async findAll(paginationDto: PaginationDto) {
     const { limit = 10, offset = 0 } = paginationDto;
 
-    const productos = this.productRepository.find({
+    const productos = await this.productRepository.find({
       take: limit,
       skip: offset,
-      //TODO: reallciones
+      realtions: {
+        Images: true,
+      }
     });
-    return productos;
+    return productos.map(producto => ({
+      ...producto, images: producto.images.map(img => img.url)
+    }));
   }
 
   async findOne(id: string) {
@@ -59,25 +66,42 @@ export class ProductsService {
     if (isUUID(id)) {
       product = await this.productRepository.findOneBy({ id });
     } else {
-      const queryBuilder = this.productRepository.createQueryBuilder();
+      const queryBuilder = this.productRepository.createQueryBuilder('prod');
       product = await queryBuilder
         .where(`UPPER(title) =:title or slug =: slug`, {
           title: id.toUpperCase(),
           slug: id.toLowerCase(),
         })
+        .leftJoinAndSelect('prod.images', 'prodImages')
         .getOne();
     }
+
+    if(!product) throw new NotFoundException('Product not found');
+
+    return product;
+  }
+
+  async findeOnePlain( term: string){
+    const {images=[],...rest} = await this.findOne(term);
+
+    return {...rest, images: images.map(image => image.url)}
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
+
+    const {images, ...toUpdate} = updateProductDto; 
+
     const product = await this.productRepository.preload({
       id,
-      ...updateProductDto, // busca por id y cambia todas las propiedades
-      images: []
+      ...toUpdate
     });
 
     if (!product)
       throw new NotFoundException(`Product with id ${id} not found`);
+
+    // Create Query Runner
+
+    const queryRunner = this.dataSource.createQueryBuilder()   ;
 
     try {
       await this.productRepository.save(product);
