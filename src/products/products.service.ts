@@ -14,7 +14,6 @@ import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { validate as isUUID } from 'uuid';
 import { ProductImage } from './entities';
 
-
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger('ProductsService');
@@ -25,19 +24,23 @@ export class ProductsService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(ProductImage)
     private readonly productRepository: Repository<ProductImage>,
-    
+
     private readonly dataSource: DataSource,
   ) {}
 
   async create(createProductDto: CreateProductDto) {
     try {
-
-      const {images=[], ...productDetails} = CreateProductDto;
-      const producto = this.productRepository.create({...createProductDto, images: images.map(image => this.productImageRepository.create({url: image}))});
+      const { images = [], ...productDetails } = CreateProductDto;
+      const producto = this.productRepository.create({
+        ...createProductDto,
+        images: images.map((image) =>
+          this.productImageRepository.create({ url: image }),
+        ),
+      });
 
       await this.productRepository.save(producto);
 
-      return {...product, images};
+      return { ...product, images };
     } catch (error) {
       console.log(error);
       this.handleErrorExceptions(error);
@@ -53,10 +56,11 @@ export class ProductsService {
       skip: offset,
       realtions: {
         Images: true,
-      }
+      },
     });
-    return productos.map(producto => ({
-      ...producto, images: producto.images.map(img => img.url)
+    return productos.map((producto) => ({
+      ...producto,
+      images: producto.images.map((img) => img.url),
     }));
   }
 
@@ -76,24 +80,23 @@ export class ProductsService {
         .getOne();
     }
 
-    if(!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('Product not found');
 
     return product;
   }
 
-  async findeOnePlain( term: string){
-    const {images=[],...rest} = await this.findOne(term);
+  async findeOnePlain(term: string) {
+    const { images = [], ...rest } = await this.findOne(term);
 
-    return {...rest, images: images.map(image => image.url)}
+    return { ...rest, images: images.map((image) => image.url) };
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
-
-    const {images, ...toUpdate} = updateProductDto; 
+    const { images, ...toUpdate } = updateProductDto;
 
     const product = await this.productRepository.preload({
       id,
-      ...toUpdate
+      ...toUpdate,
     });
 
     if (!product)
@@ -101,12 +104,33 @@ export class ProductsService {
 
     // Create Query Runner
 
-    const queryRunner = this.dataSource.createQueryBuilder()   ;
+    const queryRunner = this.dataSource.createQueryBuilder();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
     try {
-      await this.productRepository.save(product);
+      if (images) {
+        await queryRunner.manager.delete(ProductImage, { product: { id } });
+
+        product.images = images.map((image) =>
+          this.productImageRepository.create({ url: image }),
+        );
+      } else {
+        product.images = await this.productImageRepository.findBy({
+          product: { id },
+        });
+      }
+
+      await queryRunner.manager.save(product);
+
+      await queryRunner.commitTransaction();
+      await queryRunner.release();
+
+      return product;
     } catch (error) {
-      console.log(error)
+      await queryRunner.rollbackTransaction();
+      await queryRunner.release();
+      console.log(error);
       this.handleErrorExceptions(error);
     }
     return product;
@@ -123,5 +147,15 @@ export class ProductsService {
     }
 
     this.logger.error(error);
+  }
+
+  async deleteAllProducts() {
+    const query = this.productRepository.createQueryBuilder('product');
+    try {
+      return await query.delete().where({}).execute();
+
+    } catch (error) {
+      this.handleErrorExceptions(error)
+    }
   }
 }
